@@ -25,7 +25,7 @@ jobs:
         run: go install sigs.k8s.io/kind@latest
 
       - name: Install kubectl
-        uses: azure/setup-kubectl@c0c8b32d33a5244f1e5947304550403b63930415 # v4
+        uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
 
       - name: Create kind cluster
         run: kind create cluster --config e2e/kind-config.yaml --wait 60s
