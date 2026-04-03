@@ -2,6 +2,8 @@
 
 A [kubectl plugin](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/) that runs [RustNet](https://github.com/domcyrus/rustnet) as an ephemeral debug pod on Kubernetes nodes for real-time network monitoring.
 
+![kubectl-rustnet Demo](./assets/kubectl-rustnet.gif)
+
 ## Features
 
 - Deploys RustNet with the correct security context for packet capture and eBPF
