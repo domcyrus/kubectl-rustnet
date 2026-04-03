@@ -1,0 +1,45 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  e2e:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.22"
+
+      - name: Build plugin
+        run: go build -o kubectl-rustnet ./cmd/kubectl-rustnet
+
+      - name: Install kind
+        run: go install sigs.k8s.io/kind@latest
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@c0c8b32d33a5244f1e5947304550403b63930415 # v4
+
+      - name: Create kind cluster
+        run: kind create cluster --config e2e/kind-config.yaml --wait 60s
+
+      - name: Pull and load rustnet image
+        run: |
+          docker pull ghcr.io/domcyrus/rustnet:latest || true
+          kind load docker-image ghcr.io/domcyrus/rustnet:latest || true
+
+      - name: Run e2e tests
+        run: go test ./e2e/ -v -timeout 300s
+        env:
+          KUBECTL_RUSTNET_BIN: ./kubectl-rustnet
+
+      - name: Cleanup
+        if: always()
+        run: kind delete cluster

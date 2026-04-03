@@ -1,0 +1,61 @@
+apiVersion: krew.googlecontainertools.github.com/v1alpha2
+kind: Plugin
+metadata:
+  name: rustnet
+spec:
+  version: v0.1.0
+  homepage: https://github.com/domcyrus/kubectl-rustnet
+  shortDescription: Run RustNet network monitor as a debug pod on Kubernetes nodes
+  description: |
+    RustNet is a real-time network monitoring TUI with deep packet inspection
+    for 15+ protocols, process attribution, and GeoIP lookups.
+
+    This plugin deploys RustNet as an ephemeral debug pod on a Kubernetes node,
+    with the proper security context for packet capture and eBPF support.
+
+    Features:
+    - Interactive TUI with real-time packet analysis
+    - Deep packet inspection (HTTP, TLS/SNI, DNS, SSH, QUIC, and more)
+    - Process-to-connection attribution via eBPF
+    - Node-level network visibility via hostNetwork
+    - Automatic cleanup of debug pods
+  caveats: |
+    This plugin requires cluster permissions to create pods with hostNetwork,
+    hostPID, and elevated capabilities (NET_RAW, BPF, PERFMON).
+    The debug pod runs as root with elevated privileges for packet capture.
+  platforms:
+    - selector:
+        matchLabels:
+          os: linux
+          arch: amd64
+      uri: https://github.com/domcyrus/kubectl-rustnet/releases/download/v0.1.0/kubectl-rustnet_linux_amd64.tar.gz
+      sha256: PLACEHOLDER
+      bin: kubectl-rustnet
+    - selector:
+        matchLabels:
+          os: linux
+          arch: arm64
+      uri: https://github.com/domcyrus/kubectl-rustnet/releases/download/v0.1.0/kubectl-rustnet_linux_arm64.tar.gz
+      sha256: PLACEHOLDER
+      bin: kubectl-rustnet
+    - selector:
+        matchLabels:
+          os: darwin
+          arch: amd64
+      uri: https://github.com/domcyrus/kubectl-rustnet/releases/download/v0.1.0/kubectl-rustnet_darwin_amd64.tar.gz
+      sha256: PLACEHOLDER
+      bin: kubectl-rustnet
+    - selector:
+        matchLabels:
+          os: darwin
+          arch: arm64
+      uri: https://github.com/domcyrus/kubectl-rustnet/releases/download/v0.1.0/kubectl-rustnet_darwin_arm64.tar.gz
+      sha256: PLACEHOLDER
+      bin: kubectl-rustnet
+    - selector:
+        matchLabels:
+          os: windows
+          arch: amd64
+      uri: https://github.com/domcyrus/kubectl-rustnet/releases/download/v0.1.0/kubectl-rustnet_windows_amd64.zip
+      sha256: PLACEHOLDER
+      bin: kubectl-rustnet.exe

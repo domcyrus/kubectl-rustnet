@@ -1,6 +1,6 @@
 # Binaries
-kubectl-rustnet
-kubectl-rustnet.exe
+/kubectl-rustnet
+/kubectl-rustnet.exe
 dist/
 
 # IDE

@@ -1,0 +1,34 @@
+version: 2
+project_name: kubectl-rustnet
+
+builds:
+  - main: ./cmd/kubectl-rustnet
+    binary: kubectl-rustnet
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  github:
+    owner: domcyrus
+    name: kubectl-rustnet
+  draft: false
+  prerelease: auto

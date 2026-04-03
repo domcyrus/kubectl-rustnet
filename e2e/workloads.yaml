@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo-traffic
+---
+# nginx serving HTTP traffic
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: demo-traffic
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: demo-traffic
+spec:
+  selector:
+    app: nginx
+  ports:
+    - port: 80
+---
+# curl client hitting nginx in a loop (HTTP traffic)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-client
+  namespace: demo-traffic
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: http-client
+  template:
+    metadata:
+      labels:
+        app: http-client
+    spec:
+      containers:
+        - name: curl
+          image: curlimages/curl:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              while true; do
+                curl -s http://nginx.demo-traffic.svc.cluster.local/ > /dev/null
+                sleep 2
+              done
+---
+# DNS lookup client (DNS + HTTPS traffic)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dns-client
+  namespace: demo-traffic
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dns-client
+  template:
+    metadata:
+      labels:
+        app: dns-client
+    spec:
+      containers:
+        - name: dns
+          image: curlimages/curl:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              while true; do
+                curl -s -o /dev/null https://httpbin.org/get 2>/dev/null || true
+                curl -s -o /dev/null https://example.com 2>/dev/null || true
+                curl -s -o /dev/null https://api.github.com 2>/dev/null || true
+                sleep 3
+              done
+---
+# Redis (TCP traffic on port 6379)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: demo-traffic
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:alpine
+          ports:
+            - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: demo-traffic
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+---
+# Redis client pinging in a loop
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-client
+  namespace: demo-traffic
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-client
+  template:
+    metadata:
+      labels:
+        app: redis-client
+    spec:
+      containers:
+        - name: redis-cli
+          image: redis:alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              while true; do
+                redis-cli -h redis.demo-traffic.svc.cluster.local PING
+                redis-cli -h redis.demo-traffic.svc.cluster.local SET demo-key "rustnet-$(date +%s)"
+                redis-cli -h redis.demo-traffic.svc.cluster.local GET demo-key
+                sleep 1
+              done
