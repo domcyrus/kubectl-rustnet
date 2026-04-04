@@ -35,7 +35,7 @@ jobs:
       - name: Run e2e tests
         run: go test ./e2e/ -v -timeout 300s
         env:
-          KUBECTL_RUSTNET_BIN: ./kubectl-rustnet
+          KUBECTL_RUSTNET_BIN: ${{ github.workspace }}/kubectl-rustnet
 
       - name: Cleanup
         if: always()
