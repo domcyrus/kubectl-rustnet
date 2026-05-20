@@ -3,7 +3,26 @@ package pod
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
+
+// hasInterfaceFlag reports whether the user-supplied rustnet args already pin
+// a capture interface via `-i` / `--interface` (with space or `=` separator)
+// or the glued short form `-iNAME`. Used to decide whether kubectl-rustnet
+// should inject `-i any` as a default.
+func hasInterfaceFlag(args []string) bool {
+	for _, a := range args {
+		switch {
+		case a == "-i", a == "--interface":
+			return true
+		case strings.HasPrefix(a, "--interface="):
+			return true
+		case strings.HasPrefix(a, "-i") && !strings.HasPrefix(a, "--") && len(a) > 2:
+			return true
+		}
+	}
+	return false
+}
 
 // Options configures how the debug pod is constructed.
 type Options struct {
@@ -18,9 +37,9 @@ type Options struct {
 const Label = "app=rustnet-debug"
 
 type podOverride struct {
-	APIVersion string            `json:"apiVersion"`
-	Metadata   podOverrideMeta   `json:"metadata"`
-	Spec       podOverrideSpec   `json:"spec"`
+	APIVersion string          `json:"apiVersion"`
+	Metadata   podOverrideMeta `json:"metadata"`
+	Spec       podOverrideSpec `json:"spec"`
 }
 
 type podOverrideMeta struct {
@@ -28,11 +47,12 @@ type podOverrideMeta struct {
 }
 
 type podOverrideSpec struct {
-	HostNetwork  bool                    `json:"hostNetwork"`
-	HostPID      bool                    `json:"hostPID"`
-	NodeSelector map[string]string       `json:"nodeSelector,omitempty"`
-	Containers   []containerOverride     `json:"containers"`
-	RestartPolicy string                 `json:"restartPolicy"`
+	HostNetwork   bool                `json:"hostNetwork"`
+	HostPID       bool                `json:"hostPID"`
+	NodeSelector  map[string]string   `json:"nodeSelector,omitempty"`
+	Containers    []containerOverride `json:"containers"`
+	Volumes       []volume            `json:"volumes,omitempty"`
+	RestartPolicy string              `json:"restartPolicy"`
 }
 
 type containerOverride struct {
@@ -41,7 +61,8 @@ type containerOverride struct {
 	Args            []string        `json:"args,omitempty"`
 	Stdin           bool            `json:"stdin"`
 	TTY             bool            `json:"tty"`
-	SecurityContext securityContext  `json:"securityContext"`
+	VolumeMounts    []volumeMount   `json:"volumeMounts,omitempty"`
+	SecurityContext securityContext `json:"securityContext"`
 }
 
 type securityContext struct {
@@ -52,6 +73,22 @@ type securityContext struct {
 
 type capabilities struct {
 	Add []string `json:"add"`
+}
+
+type volume struct {
+	Name     string   `json:"name"`
+	HostPath hostPath `json:"hostPath"`
+}
+
+type hostPath struct {
+	Path string `json:"path"`
+	Type string `json:"type,omitempty"`
+}
+
+type volumeMount struct {
+	Name      string `json:"name"`
+	MountPath string `json:"mountPath"`
+	ReadOnly  bool   `json:"readOnly"`
 }
 
 // BuildOverrides constructs the JSON override string for kubectl run.
@@ -74,20 +111,35 @@ func BuildOverrides(opts Options) (string, error) {
 	}
 
 	container := containerOverride{
-		Name:            "rustnet-debug",
-		Image:           opts.Image,
-		Stdin:           true,
-		TTY:             true,
+		Name:  "rustnet-debug",
+		Image: opts.Image,
+		Stdin: true,
+		TTY:   true,
+		// Mount the kubelet log directories read-only so RustNet can resolve
+		// pod and container names from /var/log/{containers,pods}. These are
+		// kubelet-managed and runtime-agnostic. Best-effort: RustNet degrades
+		// to pod UID + container ID if the mount is absent.
+		VolumeMounts: []volumeMount{
+			{Name: "var-log", MountPath: "/var/log", ReadOnly: true},
+		},
 		SecurityContext: sc,
 	}
-	if len(opts.RustnetArgs) > 0 {
-		container.Args = opts.RustnetArgs
+	// Default rustnet to `-i any` so we see traffic on every interface,
+	// including the host-side veth peers used by inter-pod same-node
+	// communication. Skip when the user has already pinned an interface.
+	args := opts.RustnetArgs
+	if !hasInterfaceFlag(args) {
+		args = append([]string{"-i", "any"}, args...)
 	}
+	container.Args = args
 
 	spec := podOverrideSpec{
-		HostNetwork:   true,
-		HostPID:       true,
-		Containers:    []containerOverride{container},
+		HostNetwork: true,
+		HostPID:     true,
+		Containers:  []containerOverride{container},
+		Volumes: []volume{
+			{Name: "var-log", HostPath: hostPath{Path: "/var/log", Type: "Directory"}},
+		},
 		RestartPolicy: "Never",
 	}
 	if opts.Node != "" {
