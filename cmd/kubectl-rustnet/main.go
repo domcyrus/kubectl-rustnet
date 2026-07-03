@@ -37,14 +37,14 @@ Examples:
   kubectl rustnet                                  # Monitor any node
   kubectl rustnet --node worker-3                  # Monitor a specific node
   kubectl rustnet -n monitoring --timeout 5m       # In namespace with timeout
-  kubectl rustnet -- -i eth0 --no-dpi              # Pass flags to RustNet
+  kubectl rustnet -- -i eth0 --no-dpi              # Pin capture to one interface
 
 Flags:
 `)
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, `
 RustNet flags (after --):
-  -i, --interface INTERFACE    Network interface to monitor
+  -i, --interface INTERFACE    Network interface to monitor (default: any)
   -f, --bpf-filter FILTER      BPF filter expression
   --no-dpi                     Disable deep packet inspection
   --resolve-dns                Enable reverse DNS lookups

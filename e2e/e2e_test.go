@@ -198,8 +198,19 @@ func TestPluginPodOverrides(t *testing.T) {
 		Spec struct {
 			HostNetwork bool `json:"hostNetwork"`
 			HostPID     bool `json:"hostPID"`
-			Containers  []struct {
-				Args            []string `json:"args"`
+			Volumes     []struct {
+				Name     string `json:"name"`
+				HostPath *struct {
+					Path string `json:"path"`
+				} `json:"hostPath"`
+			} `json:"volumes"`
+			Containers []struct {
+				Args         []string `json:"args"`
+				VolumeMounts []struct {
+					Name      string `json:"name"`
+					MountPath string `json:"mountPath"`
+					ReadOnly  bool   `json:"readOnly"`
+				} `json:"volumeMounts"`
 				SecurityContext struct {
 					RunAsUser    *int64 `json:"runAsUser"`
 					Capabilities struct {
@@ -255,7 +266,8 @@ func TestPluginPodOverrides(t *testing.T) {
 		}
 	}
 
-	// Verify rustnet args were passed
+	// Verify rustnet args were passed verbatim (the explicit -i eth0 must
+	// suppress the default -i any injection)
 	expectedArgs := []string{"--no-dpi", "-i", "eth0"}
 	if len(c.Args) != len(expectedArgs) {
 		t.Errorf("expected args %v, got %v", expectedArgs, c.Args)
@@ -265,6 +277,31 @@ func TestPluginPodOverrides(t *testing.T) {
 				t.Errorf("expected arg[%d]=%s, got %s", i, expectedArgs[i], arg)
 			}
 		}
+	}
+
+	// Verify the /var/log hostPath volume and its read-only mount
+	volFound := false
+	for _, v := range p.Spec.Volumes {
+		if v.Name == "var-log" && v.HostPath != nil && v.HostPath.Path == "/var/log" {
+			volFound = true
+			break
+		}
+	}
+	if !volFound {
+		t.Error("expected var-log hostPath volume for /var/log")
+	}
+	mountFound := false
+	for _, m := range c.VolumeMounts {
+		if m.Name == "var-log" && m.MountPath == "/var/log" {
+			mountFound = true
+			if !m.ReadOnly {
+				t.Error("expected /var/log mount to be read-only")
+			}
+			break
+		}
+	}
+	if !mountFound {
+		t.Error("expected container to mount var-log at /var/log")
 	}
 
 	cleanupRustnetPods(t)

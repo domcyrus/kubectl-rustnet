@@ -294,6 +294,7 @@ func TestBuildOverridesPrependAnyWhenInterfaceNotSet(t *testing.T) {
 func TestBuildOverridesUserInterfaceWinsOverDefault(t *testing.T) {
 	cases := [][]string{
 		{"-i", "eth0"},
+		{"-i=eth0"},
 		{"--interface", "eth0"},
 		{"--interface=eth0"},
 		{"-ieth0"},

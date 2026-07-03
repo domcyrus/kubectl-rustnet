@@ -8,8 +8,8 @@ import (
 
 // hasInterfaceFlag reports whether the user-supplied rustnet args already pin
 // a capture interface via `-i` / `--interface` (with space or `=` separator)
-// or the glued short form `-iNAME`. Used to decide whether kubectl-rustnet
-// should inject `-i any` as a default.
+// or the glued short forms `-iNAME` / `-i=NAME`. Used to decide whether
+// kubectl-rustnet should inject `-i any` as a default.
 func hasInterfaceFlag(args []string) bool {
 	for _, a := range args {
 		switch {
@@ -17,7 +17,7 @@ func hasInterfaceFlag(args []string) bool {
 			return true
 		case strings.HasPrefix(a, "--interface="):
 			return true
-		case strings.HasPrefix(a, "-i") && !strings.HasPrefix(a, "--") && len(a) > 2:
+		case strings.HasPrefix(a, "-i") && len(a) > 2:
 			return true
 		}
 	}
@@ -117,8 +117,8 @@ func BuildOverrides(opts Options) (string, error) {
 		TTY:   true,
 		// Mount the kubelet log directories read-only so RustNet can resolve
 		// pod and container names from /var/log/{containers,pods}. These are
-		// kubelet-managed and runtime-agnostic. Best-effort: RustNet degrades
-		// to pod UID + container ID if the mount is absent.
+		// kubelet-managed and runtime-agnostic. RustNet degrades to pod UID +
+		// container ID if it can't read them.
 		VolumeMounts: []volumeMount{
 			{Name: "var-log", MountPath: "/var/log", ReadOnly: true},
 		},
