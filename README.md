@@ -9,6 +9,7 @@ A [kubectl plugin](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugi
 - Deploys RustNet with the correct security context for packet capture and eBPF
 - Interactive TUI with deep packet inspection for 15+ protocols
 - Process-to-connection attribution via eBPF on the target node
+- Pod and container attribution: connections are labeled with their pod, namespace, and container, and can be filtered with the `pod:`, `ns:`, and `container:` keywords (see the [RustNet usage guide](https://github.com/domcyrus/rustnet/blob/main/USAGE.md#--kubernetes-mode-optional-feature))
 - Automatic cleanup of debug pods on exit
 - Node targeting via `--node` flag
 
@@ -55,7 +56,8 @@ kubectl rustnet -n monitoring --timeout 5m
 # Pin the capture to a single interface (overrides the -i any default)
 kubectl rustnet -- -i eth0 --no-dpi
 
-# Use a specific image tag
+# Use a specific image tag. Note: pod/container attribution needs a tag
+# newer than v1.4.0 (or latest); older tags fall back to plain monitoring.
 kubectl rustnet --image ghcr.io/domcyrus/rustnet:v1.1.0
 
 # Legacy kernels (< 5.8) that don't support CAP_BPF
@@ -87,10 +89,14 @@ kubectl rustnet --privileged
 | `--no-dpi` | Disable deep packet inspection |
 | `--resolve-dns` | Enable reverse DNS lookups |
 | `--no-geoip` | Disable GeoIP lookups |
-| `--json-log FILE` | Export connection events as JSON |
-| `--pcap-export FILE` | Export packets to PCAP file |
+| `--json-log FILE` | Export connection events as JSON (includes pod/container attribution) |
+| `--pcap-export FILE` | Export packets to PCAP file with a JSONL sidecar |
+| `--pcapng-export FILE` | Export packets to an annotated PCAPNG with per-packet process comments |
+| `--kubernetes MODE` | Pod/container attribution: `auto` (default, on inside a pod), `on`, or `off` |
 | `--refresh-interval MS` | UI refresh interval (default: 1000) |
 | `--no-color` | Disable colors |
+
+Export files are written inside the ephemeral pod, which is deleted on exit. Copy them out with `kubectl cp` before quitting RustNet.
 
 ## How It Works
 
@@ -100,6 +106,7 @@ The plugin creates an ephemeral pod with:
 - **`hostPID: true`** for process attribution via eBPF
 - **`runAsUser: 0`** to read host `/proc` entries for process lookup
 - **`NET_RAW` + `BPF` + `PERFMON`** capabilities for packet capture and eBPF
+- **Read-only `/var/log` mount** so RustNet can resolve pod and container names from the kubelet log directories (`/var/log/containers`, `/var/log/pods`)
 
 On exit (or Ctrl+C), the pod is automatically deleted.
 
