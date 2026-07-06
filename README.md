@@ -41,7 +41,9 @@ kubectl apply -f deploy/rbac.yaml
 ## Usage
 
 ```bash
-# Monitor any node (scheduler picks)
+# Monitor any node (scheduler picks). RustNet captures from every interface
+# by default (-i any), which includes the host-side veth peers used by
+# pod-to-pod same-node communication.
 kubectl rustnet
 
 # Monitor a specific node
@@ -50,7 +52,7 @@ kubectl rustnet --node worker-3
 # In a specific namespace with a timeout
 kubectl rustnet -n monitoring --timeout 5m
 
-# Pass flags to RustNet (after --)
+# Pin the capture to a single interface (overrides the -i any default)
 kubectl rustnet -- -i eth0 --no-dpi
 
 # Use a specific image tag
@@ -69,7 +71,7 @@ kubectl rustnet --privileged
 |------|---------|-------------|
 | `--namespace`, `-n` | `default` | Kubernetes namespace |
 | `--node` | (any) | Target a specific node |
-| `--image` | `ghcr.io/domcyrus/rustnet:latest` | Container image |
+| `--image` | `ghcr.io/domcyrus/rustnet:latest` | Container image (has pod/container attribution enabled) |
 | `--timeout` | 0 (none) | Session timeout (e.g. `5m`, `1h`) |
 | `--privileged` | false | Run in privileged mode |
 | `--legacy-kernel` | false | Use SYS_ADMIN instead of BPF+PERFMON |
@@ -80,7 +82,7 @@ kubectl rustnet --privileged
 
 | Flag | Description |
 |------|-------------|
-| `-i`, `--interface` | Network interface to monitor |
+| `-i`, `--interface` | Network interface to monitor (defaults to `any` when not set, so inter-pod same-node traffic on host-side veths is captured) |
 | `-f`, `--bpf-filter` | BPF filter expression |
 | `--no-dpi` | Disable deep packet inspection |
 | `--resolve-dns` | Enable reverse DNS lookups |
