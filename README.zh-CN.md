@@ -24,6 +24,10 @@ kubectl rustnet -- -i eth0              # 向 RustNet 传递选项
 
 默认抓取接口为 `any`，可查看节点各接口的流量，包括 Pod 的 veth 对端。官方镜像还可以将连接关联到 Pod 和容器。插件参数见 `kubectl rustnet --help`；界面操作和过滤方法见 [RustNet 使用指南](https://github.com/domcyrus/rustnet/blob/main/USAGE.zh-CN.md)。
 
+## 保存抓包结果
+
+`kubectl rustnet --output-dir ./captures --timeout 5m` 会在删除 Pod 前将 JSONL 和 PCAPNG 文件保存到本地。格式、权限和故障恢复方法见[导出指南](docs/exports.zh-CN.md)。
+
 ## 演示
 
 <p align="center"><img src="assets/kubectl-rustnet.gif" alt="kubectl-rustnet 使用 RustNet v1.6.0 监控实时 Kubernetes 流量" width="800"></p>
@@ -32,6 +36,6 @@ kubectl rustnet -- -i eth0              # 向 RustNet 传递选项
 
 ## 要求
 
-需要集群权限，以创建和连接使用 `hostNetwork`、`hostPID`、只读主机 `/var/log` 挂载及抓包 capabilities 的 Pod。集群还必须能够拉取 `ghcr.io/domcyrus/rustnet:latest`。参见 [RBAC 示例](deploy/rbac.yaml)和 [RustNet Kubernetes 指南](https://github.com/domcyrus/rustnet/blob/main/USAGE.zh-CN.md#--kubernetes-mode-optional-feature)。
+需要集群权限，以创建和连接使用 `hostNetwork`、`hostPID`、只读主机 `/var/log` 挂载及抓包权限的 Pod。导出还需要 `pods/exec` 权限。集群必须能够拉取 `ghcr.io/domcyrus/rustnet:latest`。参见 [RBAC 示例](deploy/rbac.yaml)和 [RustNet Kubernetes 指南](https://github.com/domcyrus/rustnet/blob/main/USAGE.zh-CN.md#--kubernetes-mode-optional-feature)。
 
 基于 [Apache 2.0](LICENSE) 许可证发布。
