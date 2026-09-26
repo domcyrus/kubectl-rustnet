@@ -329,3 +329,40 @@ func TestBuildOverridesUserInterfaceWinsOverDefault(t *testing.T) {
 		})
 	}
 }
+
+func TestExportPodKeepsHelperAlive(t *testing.T) {
+	raw, err := BuildOverrides(Options{Image: "rustnet:test", ExportFormat: "both", RustnetArgs: []string{"--headless", "--duration", "1s"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p podOverride
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Spec.Containers) != 2 {
+		t.Fatal("missing export helper")
+	}
+	capture, helper := p.Spec.Containers[0], p.Spec.Containers[1]
+	if capture.TTY || capture.Stdin {
+		t.Fatal("headless capture should not allocate a TTY")
+	}
+	if helper.Name != ExportContainer || helper.Image != capture.Image {
+		t.Fatal("wrong helper")
+	}
+	if len(helper.VolumeMounts) != 1 || helper.VolumeMounts[0].MountPath != ExportPath {
+		t.Fatal("helper should only mount evidence")
+	}
+	if helper.SecurityContext.Capabilities.Drop[0] != "ALL" || *helper.SecurityContext.AllowPrivilegeEscalation {
+		t.Fatal("helper must not retain capture privileges")
+	}
+	if capture.Command[2] != captureScript || helper.Command[2] != helperScript {
+		t.Fatal("missing lifecycle commands")
+	}
+	args := strings.Join(capture.Args, " ")
+	if !strings.Contains(args, "--json-log /evidence/connections.jsonl") || !strings.Contains(args, "--pcapng-export /evidence/capture.pcapng") {
+		t.Fatalf("wrong exports: %s", args)
+	}
+	if p.Spec.Volumes[1].EmptyDir == nil || p.Spec.Volumes[1].HostPath != nil {
+		t.Fatal("evidence must use an ephemeral shared volume")
+	}
+}

@@ -31,6 +31,7 @@ type Options struct {
 	Privileged   bool
 	LegacyKernel bool
 	RustnetArgs  []string
+	ExportFormat string
 }
 
 // Label is the fixed label applied to all rustnet debug pods for easy identification and cleanup.
@@ -58,6 +59,7 @@ type podOverrideSpec struct {
 type containerOverride struct {
 	Name            string          `json:"name"`
 	Image           string          `json:"image"`
+	Command         []string        `json:"command,omitempty"`
 	Args            []string        `json:"args,omitempty"`
 	Stdin           bool            `json:"stdin"`
 	TTY             bool            `json:"tty"`
@@ -66,18 +68,21 @@ type containerOverride struct {
 }
 
 type securityContext struct {
-	Privileged   *bool         `json:"privileged,omitempty"`
-	RunAsUser    *int64        `json:"runAsUser,omitempty"`
-	Capabilities *capabilities `json:"capabilities,omitempty"`
+	Privileged               *bool         `json:"privileged,omitempty"`
+	RunAsUser                *int64        `json:"runAsUser,omitempty"`
+	AllowPrivilegeEscalation *bool         `json:"allowPrivilegeEscalation,omitempty"`
+	Capabilities             *capabilities `json:"capabilities,omitempty"`
 }
 
 type capabilities struct {
-	Add []string `json:"add"`
+	Add  []string `json:"add,omitempty"`
+	Drop []string `json:"drop,omitempty"`
 }
 
 type volume struct {
-	Name     string   `json:"name"`
-	HostPath hostPath `json:"hostPath"`
+	Name     string    `json:"name"`
+	HostPath *hostPath `json:"hostPath,omitempty"`
+	EmptyDir *struct{} `json:"emptyDir,omitempty"`
 }
 
 type hostPath struct {
@@ -107,6 +112,9 @@ func BuildOverrides(opts Options) (string, error) {
 		} else {
 			caps = append(caps, "BPF", "PERFMON")
 		}
+		if opts.ExportFormat != "" {
+			caps = append(caps, "CHOWN")
+		}
 		sc.Capabilities = &capabilities{Add: caps}
 	}
 
@@ -127,7 +135,10 @@ func BuildOverrides(opts Options) (string, error) {
 	// Default rustnet to `-i any` so we see traffic on every interface,
 	// including the host-side veth peers used by inter-pod same-node
 	// communication. Skip when the user has already pinned an interface.
-	args := opts.RustnetArgs
+	args, err := exportArgs(opts.ExportFormat, opts.RustnetArgs)
+	if err != nil {
+		return "", err
+	}
 	if !hasInterfaceFlag(args) {
 		args = append([]string{"-i", "any"}, args...)
 	}
@@ -138,9 +149,27 @@ func BuildOverrides(opts Options) (string, error) {
 		HostPID:     true,
 		Containers:  []containerOverride{container},
 		Volumes: []volume{
-			{Name: "var-log", HostPath: hostPath{Path: "/var/log", Type: "Directory"}},
+			{Name: "var-log", HostPath: &hostPath{Path: "/var/log", Type: "Directory"}},
 		},
 		RestartPolicy: "Never",
+	}
+	if opts.ExportFormat != "" {
+		spec.Volumes = append(spec.Volumes, volume{Name: "evidence", EmptyDir: &struct{}{}})
+		spec.Containers[0].VolumeMounts = append(spec.Containers[0].VolumeMounts, volumeMount{Name: "evidence", MountPath: ExportPath})
+		spec.Containers[0].Command = []string{"/bin/sh", "-c", captureScript, "rustnet"}
+		noEscalation := false
+		spec.Containers = append(spec.Containers, containerOverride{
+			Name: ExportContainer, Image: opts.Image,
+			Command:         []string{"/bin/sh", "-c", helperScript},
+			VolumeMounts:    []volumeMount{{Name: "evidence", MountPath: ExportPath}},
+			SecurityContext: securityContext{RunAsUser: &uid, AllowPrivilegeEscalation: &noEscalation, Capabilities: &capabilities{Drop: []string{"ALL"}}},
+		})
+	}
+	for _, arg := range opts.RustnetArgs {
+		if arg == "--headless" {
+			spec.Containers[0].Stdin = false
+			spec.Containers[0].TTY = false
+		}
 	}
 	if opts.Node != "" {
 		spec.NodeSelector = map[string]string{
