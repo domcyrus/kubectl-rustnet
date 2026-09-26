@@ -24,6 +24,8 @@ func main() {
 	kubeconfig := flag.String("kubeconfig", "", "Path to kubeconfig file")
 	context := flag.String("context", "", "Kubernetes context")
 	timeout := flag.Duration("timeout", 0, "Timeout for the debug session (e.g. 5m, 1h). 0 means no timeout")
+	outputDir := flag.String("output-dir", "", "Copy capture evidence to a local session directory before pod cleanup")
+	outputFormat := flag.String("output-format", "", "Exports for --output-dir: jsonl, pcapng, pcap, or both (default both)")
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.BoolVar(showVersion, "v", false, "Print version and exit (shorthand)")
 
@@ -37,6 +39,7 @@ Examples:
   kubectl rustnet                                  # Monitor any node
   kubectl rustnet --node worker-3                  # Monitor a specific node
   kubectl rustnet -n monitoring --timeout 5m       # In namespace with timeout
+  kubectl rustnet --output-dir ./captures --timeout 5m # Save JSONL and PCAPNG
   kubectl rustnet -- -i eth0 --no-dpi              # Pin capture to one interface
 
 Flags:
@@ -68,10 +71,12 @@ RustNet flags (after --):
 	rustnetArgs := flag.Args()
 
 	opts := runner.Options{
-		Namespace:  *namespace,
-		Kubeconfig: *kubeconfig,
-		Context:    *context,
-		Timeout:    *timeout,
+		Namespace:    *namespace,
+		Kubeconfig:   *kubeconfig,
+		Context:      *context,
+		Timeout:      *timeout,
+		OutputDir:    *outputDir,
+		OutputFormat: *outputFormat,
 		Pod: pod.Options{
 			Image:        *image,
 			Node:         *node,
