@@ -1,130 +1,37 @@
-# kubectl-rustnet
+<p align="center"><img src="assets/rustnet.svg" alt="RustNet logo" width="96" height="96"></p>
 
-A [kubectl plugin](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/) that runs [RustNet](https://github.com/domcyrus/rustnet) as an ephemeral debug pod on Kubernetes nodes for real-time network monitoring.
+<h1 align="center">kubectl-rustnet</h1>
 
-![kubectl-rustnet Demo](./assets/kubectl-rustnet.gif)
+<p align="center"><strong>English</strong> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.ja.md">日本語</a></p>
 
-## Features
+Run [RustNet](https://github.com/domcyrus/rustnet) on a Kubernetes node from `kubectl`. The plugin starts an ephemeral debug pod, opens the network monitor, and deletes the pod when you exit.
 
-- Deploys RustNet with the correct security context for packet capture and eBPF
-- Interactive TUI with deep packet inspection for 15+ protocols
-- Process-to-connection attribution via eBPF on the target node
-- Pod and container attribution: connections are labeled with their pod, namespace, and container, and can be filtered with the `pod:`, `ns:`, and `container:` keywords (see the [RustNet usage guide](https://github.com/domcyrus/rustnet/blob/main/USAGE.md#--kubernetes-mode-optional-feature))
-- Automatic cleanup of debug pods on exit
-- Node targeting via `--node` flag
-
-## Installation
-
-### Via Krew
+## Install
 
 ```bash
 kubectl krew install rustnet
 ```
 
-### Manual
+Or download a binary from [releases](https://github.com/domcyrus/kubectl-rustnet/releases) and put it in your `PATH`.
 
-Download the binary from the [releases page](https://github.com/domcyrus/kubectl-rustnet/releases) and place it in your `$PATH`.
-
-## Prerequisites
-
-- `kubectl` configured with cluster access
-- Cluster permissions to create pods with `hostNetwork`, `hostPID`, and elevated capabilities
-- The `ghcr.io/domcyrus/rustnet` image accessible from the cluster
-
-### RBAC
-
-A sample ClusterRole is provided in [`deploy/rbac.yaml`](deploy/rbac.yaml). Apply it and bind to your user:
+## Run
 
 ```bash
-kubectl apply -f deploy/rbac.yaml
+kubectl rustnet                         # Monitor any node
+kubectl rustnet --node worker-3         # Choose a node
+kubectl rustnet -- -i eth0              # Pass options to RustNet
 ```
 
-## Usage
+The default capture interface is `any`, so traffic on the node's interfaces, including pod veth peers, is visible. The official image can attribute connections to pods and containers. Use `kubectl rustnet --help` for plugin flags and the [RustNet usage guide](https://github.com/domcyrus/rustnet/blob/main/USAGE.md) for monitor controls and filters.
 
-```bash
-# Monitor any node (scheduler picks). RustNet captures from every interface
-# by default (-i any), which includes the host-side veth peers used by
-# pod-to-pod same-node communication.
-kubectl rustnet
+## Demo
 
-# Monitor a specific node
-kubectl rustnet --node worker-3
+<p align="center"><img src="assets/kubectl-rustnet.gif" alt="kubectl-rustnet monitoring live Kubernetes traffic with RustNet v1.6.0" width="800"></p>
 
-# In a specific namespace with a timeout
-kubectl rustnet -n monitoring --timeout 5m
+Recorded with the plugin on a live kind cluster using RustNet v1.6.0.
 
-# Pin the capture to a single interface (overrides the -i any default)
-kubectl rustnet -- -i eth0 --no-dpi
+## Requirements
 
-# Use a specific image tag. Note: pod/container attribution needs a tag
-# newer than v1.4.0 (or latest); older tags fall back to plain monitoring.
-kubectl rustnet --image ghcr.io/domcyrus/rustnet:v1.1.0
+You need cluster access to create and attach to pods with `hostNetwork`, `hostPID`, a read-only host `/var/log` mount, and packet capture capabilities. The cluster must be able to pull `ghcr.io/domcyrus/rustnet:latest`. See the [sample RBAC policy](deploy/rbac.yaml) and [RustNet Kubernetes guide](https://github.com/domcyrus/rustnet/blob/main/USAGE.md#--kubernetes-mode-optional-feature).
 
-# Legacy kernels (< 5.8) that don't support CAP_BPF
-kubectl rustnet --legacy-kernel
-
-# Privileged mode (when fine-grained caps aren't enough)
-kubectl rustnet --privileged
-```
-
-### Plugin Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--namespace`, `-n` | `default` | Kubernetes namespace |
-| `--node` | (any) | Target a specific node |
-| `--image` | `ghcr.io/domcyrus/rustnet:latest` | Container image (has pod/container attribution enabled) |
-| `--timeout` | 0 (none) | Session timeout (e.g. `5m`, `1h`) |
-| `--privileged` | false | Run in privileged mode |
-| `--legacy-kernel` | false | Use SYS_ADMIN instead of BPF+PERFMON |
-| `--kubeconfig` | (default) | Path to kubeconfig file |
-| `--context` | (default) | Kubernetes context |
-
-### RustNet Flags (after `--`)
-
-| Flag | Description |
-|------|-------------|
-| `-i`, `--interface` | Network interface to monitor (defaults to `any` when not set, so inter-pod same-node traffic on host-side veths is captured) |
-| `-f`, `--bpf-filter` | BPF filter expression |
-| `--no-dpi` | Disable deep packet inspection |
-| `--resolve-dns` | Enable reverse DNS lookups |
-| `--no-geoip` | Disable GeoIP lookups |
-| `--json-log FILE` | Export connection events as JSON (includes pod/container attribution) |
-| `--pcap-export FILE` | Export packets to PCAP file with a JSONL sidecar |
-| `--pcapng-export FILE` | Export packets to an annotated PCAPNG with per-packet process comments |
-| `--kubernetes MODE` | Pod/container attribution: `auto` (default, on inside a pod), `on`, or `off` |
-| `--refresh-interval MS` | UI refresh interval (default: 1000) |
-| `--no-color` | Disable colors |
-
-Export files are written inside the ephemeral pod, which is deleted on exit. Copy them out with `kubectl cp` before quitting RustNet.
-
-## How It Works
-
-The plugin creates an ephemeral pod with:
-
-- **`hostNetwork: true`** for node-level network visibility
-- **`hostPID: true`** for process attribution via eBPF
-- **`runAsUser: 0`** to read host `/proc` entries for process lookup
-- **`NET_RAW` + `BPF` + `PERFMON`** capabilities for packet capture and eBPF
-- **Read-only `/var/log` mount** so RustNet can resolve pod and container names from the kubelet log directories (`/var/log/containers`, `/var/log/pods`)
-
-On exit (or Ctrl+C), the pod is automatically deleted.
-
-## Development
-
-```bash
-# Build
-go build -o kubectl-rustnet ./cmd/kubectl-rustnet
-
-# Unit tests
-go test ./internal/... -v
-
-# E2E tests (requires kind and Docker)
-./e2e/setup.sh create
-KUBECTL_RUSTNET_BIN=./kubectl-rustnet go test ./e2e/ -v -timeout 300s
-./e2e/setup.sh delete
-```
-
-## License
-
-Apache License 2.0. See [LICENSE](LICENSE).
+Licensed under [Apache 2.0](LICENSE).
