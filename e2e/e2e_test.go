@@ -345,7 +345,8 @@ func TestPluginCleanupOnInterrupt(t *testing.T) {
 	go func() { done <- cmd.Wait() }()
 
 	select {
-	case <-done:
+	case _ = <-done:
+		// SIGINT during startup may return an error; pod cleanup is checked below.
 	case <-time.After(15 * time.Second):
 		_ = cmd.Process.Kill()
 		t.Error("plugin did not exit after SIGINT within 15s")
